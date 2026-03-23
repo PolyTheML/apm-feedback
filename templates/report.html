@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>APM Feedback Report</title>
+<style>
+  body { font-family: Georgia, serif; max-width: 820px; margin: 40px auto; padding: 0 24px; color: #1a1a2e; line-height: 1.6; }
+  h1 { font-size: 2rem; border-bottom: 2px solid #2e5cff; padding-bottom: 12px; }
+  h2 { font-size: 1.2rem; margin-top: 32px; color: #2e5cff; }
+  h3 { font-size: 1rem; margin-top: 20px; }
+  .meta { color: #888; font-size: .85rem; margin-bottom: 32px; }
+  .summary { background: #f5f5f0; padding: 18px; border-radius: 8px; margin-bottom: 24px; }
+  .stats { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+  .stat { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 14px 20px; text-align: center; flex: 1; min-width: 100px; }
+  .stat .val { font-size: 2rem; font-weight: 700; color: #2e5cff; }
+  .stat .lbl { font-size: .75rem; color: #888; text-transform: uppercase; letter-spacing: .05em; }
+  .theme { border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
+  .theme-h { background: #f5f5f0; padding: 12px 16px; font-weight: 700; }
+  .point { padding: 10px 16px; border-top: 1px solid #eee; font-size: .9rem; }
+  .point .text { color: #444; }
+  .point .attr { font-size: .78rem; color: #888; margin-top: 3px; }
+  .colleague { border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+  .colleague h3 { margin: 0 0 4px; }
+  .colleague .role { font-size: .85rem; color: #888; margin-bottom: 10px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: .75rem; font-weight: 600; margin: 2px; }
+  .pos { background: #e6f7f2; color: #0d9f6e; }
+  .neg { background: #fdeaea; color: #d94f4f; }
+  .neu { background: #f0f0f0; color: #666; }
+  @media print { body { margin: 20px; } }
+</style>
+</head>
+<body>
+<h1>APM Assessment — Feedback Report</h1>
+<div class="meta">Generated: {{ generated }} · {{ submissions|length }} submission{{ 's' if submissions|length != 1 }}</div>
+
+<div class="summary">
+  <strong>Executive Summary</strong><br>
+  {{ analysis.executive_summary }}
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="val">{{ submissions|length }}</div><div class="lbl">Submissions</div></div>
+  <div class="stat"><div class="val">{{ analysis.total_feedback_points }}</div><div class="lbl">Feedback Points</div></div>
+  <div class="stat"><div class="val">{{ analysis.total_suggestions }}</div><div class="lbl">Suggestions</div></div>
+  <div class="stat"><div class="val">{{ analysis.sentiment_counts.positive }}</div><div class="lbl">Positive</div></div>
+  <div class="stat"><div class="val">{{ analysis.sentiment_counts.negative }}</div><div class="lbl">Negative</div></div>
+</div>
+
+<h2>Themes</h2>
+{% for theme in analysis.themes %}
+<div class="theme">
+  <div class="theme-h">
+    {{ theme.theme }}
+    <span class="badge {{ theme.sentiment }}">{{ theme.sentiment }}</span>
+    · {{ theme.points|length }} point{{ 's' if theme.points|length != 1 }}
+  </div>
+  {% if theme.description %}<div class="point"><em>{{ theme.description }}</em></div>{% endif %}
+  {% for pt in theme.points %}
+  <div class="point">
+    <div class="text">{{ pt.text }}</div>
+    <div class="attr">— {{ pt.contributor_name }}, {{ pt.contributor_role or '–' }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p>No themes identified.</p>
+{% endfor %}
+
+<h2>Colleagues</h2>
+{% for c in analysis.colleague_summaries %}
+<div class="colleague">
+  <h3>{{ c.contributor_name }}</h3>
+  <div class="role">{{ c.contributor_role or '–' }} {{ ('· ' + c.contributor_email) if c.contributor_email else '' }}</div>
+  {% if c.overall_rating %}<span class="badge neu">{{ c.overall_rating }}</span>{% endif %}
+  {% if c.summary %}<p style="font-size:.9rem;margin:8px 0 0;color:#555">{{ c.summary }}</p>{% endif %}
+</div>
+{% endfor %}
+
+<h2>Raw Submissions</h2>
+{% for s in submissions %}
+<div class="colleague">
+  <h3>{{ s.contributor_name }} <span style="font-weight:400;font-size:.85rem">— submitted {{ s.timestamp[:10] }}</span></h3>
+  <div class="role">{{ s.contributor_role or '–' }}</div>
+  {% for k, v in s.feedback.items() %}
+  {% if v %}<p style="font-size:.875rem;margin:6px 0"><strong>{{ k|replace('_',' ')|title }}:</strong> {{ v }}</p>{% endif %}
+  {% endfor %}
+</div>
+{% endfor %}
+</body>
+</html>

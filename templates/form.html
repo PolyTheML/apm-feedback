@@ -1,0 +1,495 @@
+{% extends "base.html" %}
+{% block title %}Submit Feedback — APM Assessment{% endblock %}
+
+{% block extra_head %}
+<style>
+  .form-hero {
+    background: linear-gradient(135deg, #0f1117 60%, #1a2540);
+    color: #fff;
+    padding: 56px 24px 80px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .form-hero::before {
+    content: '';
+    position: absolute;
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(46,92,255,.25) 0%, transparent 70%);
+    top: -100px; right: -100px; border-radius: 50%;
+  }
+  .form-hero h1 {
+    font-family: var(--font-serif);
+    font-size: clamp(1.8rem, 4vw, 2.8rem);
+    font-weight: 400;
+    margin-bottom: 12px;
+    position: relative;
+  }
+  .form-hero p {
+    color: rgba(255,255,255,.65);
+    font-size: 1rem;
+    max-width: 520px;
+    margin: 0 auto 28px;
+    position: relative;
+  }
+  .progress-bar {
+    width: 100%;
+    max-width: 440px;
+    margin: 0 auto;
+    background: rgba(255,255,255,.15);
+    border-radius: 99px;
+    height: 5px;
+    position: relative;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: var(--accent);
+    transition: width .4s ease;
+    width: 0%;
+  }
+  .progress-label {
+    font-size: .78rem;
+    color: rgba(255,255,255,.5);
+    margin-top: 8px;
+    font-family: var(--font-mono);
+  }
+
+  .form-wrap {
+    max-width: 720px;
+    margin: -32px auto 64px;
+    padding: 0 24px;
+  }
+  .form-card {
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 16px 48px rgba(0,0,0,.14);
+    overflow: hidden;
+  }
+  .contributor-section {
+    background: var(--paper);
+    padding: 28px 32px;
+    border-bottom: 1px solid var(--paper-3);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .contributor-section .field-full { grid-column: 1/-1; }
+  @media (max-width: 540px) {
+    .contributor-section { grid-template-columns: 1fr; }
+  }
+
+  .question-section { padding: 32px; }
+  .question-block {
+    padding: 24px 0;
+    border-bottom: 1px solid var(--paper-2);
+  }
+  .question-block:last-of-type { border-bottom: none; }
+  .q-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .q-num {
+    min-width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: .78rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    margin-top: 1px;
+    flex-shrink: 0;
+  }
+  .q-title {
+    font-weight: 600;
+    font-size: .95rem;
+    color: var(--ink);
+    margin-bottom: 3px;
+  }
+  .q-hint {
+    font-size: .82rem;
+    color: var(--ink-faint);
+  }
+
+  label.field-label {
+    display: block;
+    font-size: .82rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+  }
+  input[type="text"],
+  input[type="email"],
+  textarea,
+  select {
+    width: 100%;
+    border: 1.5px solid var(--paper-3);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: var(--font-sans);
+    font-size: .9rem;
+    color: var(--ink);
+    background: #fff;
+    transition: border-color .15s, box-shadow .15s;
+    outline: none;
+    -webkit-appearance: none;
+  }
+  input:focus, textarea:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(46,92,255,.12);
+  }
+  textarea { resize: vertical; min-height: 90px; line-height: 1.55; }
+  select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237b8098' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; cursor: pointer; }
+
+  .char-count {
+    font-size: .75rem;
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    text-align: right;
+    margin-top: 4px;
+  }
+
+  .form-actions {
+    padding: 24px 32px;
+    background: var(--paper);
+    border-top: 1px solid var(--paper-3);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .form-actions .btn-primary { padding: 12px 32px; font-size: 1rem; }
+
+  .required-note { font-size: .8rem; color: var(--ink-faint); }
+  .required-star { color: var(--neg); }
+
+  /* Success state */
+  .success-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15,17,23,.75);
+    z-index: 999;
+    align-items: center;
+    justify-content: center;
+  }
+  .success-overlay.visible { display: flex; }
+  .success-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 48px 40px;
+    max-width: 420px;
+    width: 90%;
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+    animation: popIn .4s ease;
+  }
+  @keyframes popIn {
+    from { transform: scale(.85); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+  }
+  .success-icon {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    background: #e6f7f2;
+    color: var(--pos);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    font-size: 2rem;
+  }
+  .success-card h2 { font-family: var(--font-serif); font-size: 1.6rem; margin-bottom: 8px; }
+  .success-card p { color: var(--ink-soft); margin-bottom: 24px; font-size: .9rem; }
+
+  /* Validation */
+  .field-error { border-color: var(--neg) !important; }
+  .error-msg { font-size: .78rem; color: var(--neg); margin-top: 4px; display: none; }
+  .error-msg.visible { display: block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="form-hero">
+  <h1>APM Assessment Feedback</h1>
+  <p>Your honest input helps us refine the questionnaire for everyone. This takes approximately 15 minutes.</p>
+  <div class="progress-bar">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+  <div class="progress-label" id="progressLabel">0 of 10 questions answered</div>
+</div>
+
+<div class="form-wrap">
+  <div class="form-card">
+    <form id="feedbackForm" novalidate>
+
+      <!-- Contributor Info -->
+      <div class="contributor-section">
+        <div class="field-full">
+          <label class="field-label">Your Name <span class="required-star">*</span></label>
+          <input type="text" name="contributor_name" id="contributor_name" placeholder="First and last name" required>
+          <div class="error-msg" id="err_name">Please enter your name.</div>
+        </div>
+        <div>
+          <label class="field-label">Your Role / Team</label>
+          <input type="text" name="contributor_role" placeholder="e.g. Risk & Capital Team">
+        </div>
+        <div>
+          <label class="field-label">Email (optional)</label>
+          <input type="email" name="contributor_email" placeholder="you@company.com">
+        </div>
+      </div>
+
+      <div class="question-section">
+
+        <!-- Q1 -->
+        <div class="question-block">
+          <div class="q-label">
+            <div class="q-num">1</div>
+            <div>
+              <div class="q-title">Overall Clarity</div>
+              <div class="q-hint">Are the questions clearly written and easy to understand?</div>
+            </div>
+          </div>
+          <textarea name="clarity" class="tracked-q" placeholder="Share your thoughts on question clarity…" maxlength="1000"></textarea>
+          <div class="char-count"><span class="cc">0</span>/1000</div>
+        </div>
+
+        <!-- Q2 -->
+        <div class="question-block">
+          <div class="q-label">
+            <div class="q-num">2</div>
+            <div>
+              <div class="q-title">Question Structure & Flow</div>
+              <div class="q-hint">Is the progression logical? Does it flow naturally from one topic to the next?</div>
+            </div>
+          </div>
+          <textarea name="structure" class="tracked-q" placeholder="Comments on the structure and ordering…" maxlength="1000"></textarea>
+          <div class="char-count"><span class="cc">0</span>/1000</div>
+        </div>
+
+        <!-- Q3 -->
+        <div class="question-block">
+          <div class="q-label">
+            <div class="q-num">3</div>
+            <div>
+              <div class="q-title">Relevance to Your Role</div>
+              <div class="q-hint">Do the questions apply to your day-to-day work?</div>
+            </div>
+          </div>
+          <textarea name="relevance" class="tracked-q" placeholder="How relevant is this to your role…" maxlength="1000"></textarea>
+          <div class="char-count"><span class="cc">0</span>/1000</div>
+        </div>
+
+        <!-- Q4 -->
+        <div class="question-block">
+          <div class="q-label">
+            <div class="q-num">4</div>
+            <div>
+              <div class="q-title">Jargon & Accessibility</div>
+              <div class="q-hint">Are there terms that need explanation or a glossary?</div>
+            </div>
+          </div>
+          <textarea name="jargon" class="tracked-q" placeholder="List any confusing terms or jargon…" maxlength="1000"></textarea>
+          <div class="char-count"><span class="cc">0</span>/1000</div>
+        </div>
+
+        <!-- Q5 -->
+        <div class="question-block">
+          <div class="q-label">
+            <div class="q-num">5</div>
+            <div>
+              <div class="q-title">Length & Time Estimate</div>
+              <div class="q-hint">Is the 15-minute estimate accurate? Too long or too short?</div>
+            </div>
+          </div>
+          <textarea name="length" class="tracked-q" placeholder="How long did it take you? Was the length appropriate?…" maxlength="500"></textarea>
+          <div class="char-count"><span class="cc">0</span>/500</div>
+        </div>
+
+        <!-- Q6 -->
+        <div class="question-block">
+          <div class="q-label">
+            <div class="q-num">6</div>
+            <div>
+              <div class="q-title">Specific Issues</div>
+              <div class="q-hint">Which questions are problematic? Reference question numbers (e.g. Q7, Q12).</div>
+            </div>
+          </div>
+          <textarea name="specific_issues" class="tracked-q" placeholder="e.g. Q7 uses 'efficiency metrics' without definition…" maxlength="1500"></textarea>
+          <div class="char-count"><span class="cc">0</span>/1500</div>
+        </div>
+
+        <!-- Q7 -->
+        <div class="question-block">
+          <div class="q-label">
+            <div class="q-num">7</div>
+            <div>
+              <div class="q-title">What Works Well</div>
+              <div class="q-hint">Which questions do you find most effective and why?</div>
+            </div>
+          </div>
+          <textarea name="specific_positive" class="tracked-q" placeholder="e.g. Q17 is excellent because…" maxlength="1000"></textarea>
+          <div class="char-count"><span class="cc">0</span>/1000</div>
+        </div>
+
+        <!-- Q8 -->
+        <div class="question-block">
+          <div class="q-label">
+            <div class="q-num">8</div>
+            <div>
+              <div class="q-title">Suggestions for Improvement</div>
+              <div class="q-hint">Actionable changes you'd recommend.</div>
+            </div>
+          </div>
+          <textarea name="suggestions" class="tracked-q" placeholder="1. Add a glossary… 2. Break Q5 into two parts…" maxlength="1500"></textarea>
+          <div class="char-count"><span class="cc">0</span>/1500</div>
+        </div>
+
+        <!-- Q9 -->
+        <div class="question-block">
+          <div class="q-label">
+            <div class="q-num">9</div>
+            <div>
+              <div class="q-title">Overall Assessment <span class="required-star">*</span></div>
+              <div class="q-hint">Your overall rating of the questionnaire.</div>
+            </div>
+          </div>
+          <select name="overall" id="overall" class="tracked-q" required>
+            <option value="">— Select a rating —</option>
+            <option value="Excellent - Ready to use as-is">Excellent — Ready to use as-is</option>
+            <option value="Good - Minor improvements needed">Good — Minor improvements needed</option>
+            <option value="Adequate - Some revisions required">Adequate — Some revisions required</option>
+            <option value="Needs Work - Significant changes needed">Needs Work — Significant changes needed</option>
+          </select>
+          <div class="error-msg" id="err_overall">Please select a rating.</div>
+        </div>
+
+        <!-- Q10 -->
+        <div class="question-block">
+          <div class="q-label">
+            <div class="q-num">10</div>
+            <div>
+              <div class="q-title">Additional Comments</div>
+              <div class="q-hint">Anything else you'd like to share?</div>
+            </div>
+          </div>
+          <textarea name="additional" class="tracked-q" placeholder="Any other thoughts, questions, or observations…" maxlength="1500"></textarea>
+          <div class="char-count"><span class="cc">0</span>/1500</div>
+        </div>
+
+      </div><!-- /question-section -->
+
+      <div class="form-actions">
+        <span class="required-note"><span class="required-star">*</span> Required fields</span>
+        <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
+          Submit Feedback →
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Success Overlay -->
+<div class="success-overlay" id="successOverlay">
+  <div class="success-card">
+    <div class="success-icon">✓</div>
+    <h2>Thank you!</h2>
+    <p>Your feedback has been recorded and will be included in the consolidated analysis. Your input makes a real difference.</p>
+    <button class="btn btn-primary btn-lg" onclick="resetForm()" style="width:100%">Submit Another Response</button>
+  </div>
+</div>
+
+<script>
+// Character counters
+document.querySelectorAll('textarea[maxlength]').forEach(ta => {
+  const cc = ta.parentElement.querySelector('.cc');
+  if (!cc) return;
+  const update = () => cc.textContent = ta.value.length;
+  ta.addEventListener('input', update);
+});
+
+// Progress tracking
+const trackedQs = document.querySelectorAll('.tracked-q');
+function updateProgress() {
+  let answered = 0;
+  trackedQs.forEach(q => {
+    if (q.value && q.value.trim() !== '' && q.value !== '') answered++;
+  });
+  const pct = (answered / trackedQs.length) * 100;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressLabel').textContent = `${answered} of ${trackedQs.length} questions answered`;
+}
+trackedQs.forEach(q => q.addEventListener('input', updateProgress));
+trackedQs.forEach(q => q.addEventListener('change', updateProgress));
+
+// Form submit
+document.getElementById('feedbackForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  let valid = true;
+
+  const name = document.getElementById('contributor_name');
+  const errName = document.getElementById('err_name');
+  if (!name.value.trim()) {
+    name.classList.add('field-error');
+    errName.classList.add('visible');
+    valid = false;
+  } else {
+    name.classList.remove('field-error');
+    errName.classList.remove('visible');
+  }
+
+  const overall = document.getElementById('overall');
+  const errOverall = document.getElementById('err_overall');
+  if (!overall.value) {
+    overall.classList.add('field-error');
+    errOverall.classList.add('visible');
+    valid = false;
+  } else {
+    overall.classList.remove('field-error');
+    errOverall.classList.remove('visible');
+  }
+
+  if (!valid) {
+    document.querySelector('.field-error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+
+  try {
+    const fd = new FormData(this);
+    const resp = await fetch('/submit', { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (data.success) {
+      document.getElementById('successOverlay').classList.add('visible');
+    } else {
+      alert('Error: ' + (data.error || 'Unknown error'));
+    }
+  } catch(err) {
+    alert('Network error. Please try again.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Submit Feedback →';
+  }
+});
+
+function resetForm() {
+  document.getElementById('feedbackForm').reset();
+  document.getElementById('successOverlay').classList.remove('visible');
+  document.querySelectorAll('.cc').forEach(cc => cc.textContent = '0');
+  updateProgress();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
+{% endblock %}

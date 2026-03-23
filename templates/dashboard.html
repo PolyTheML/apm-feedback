@@ -1,0 +1,702 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — APM Feedback{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── Layout ── */
+.dash-hero {
+  background: var(--ink);
+  color: #fff;
+  padding: 28px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.dash-hero h1 { font-family: var(--font-serif); font-size: 1.55rem; font-weight: 400; }
+.dash-hero .meta { font-size: .8rem; color: rgba(255,255,255,.5); margin-top: 2px; }
+.dash-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.export-btn {
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid rgba(255,255,255,.2);
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.85);
+  transition: all .15s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.export-btn:hover { background: rgba(255,255,255,.16); text-decoration: none; color: #fff; border-color: rgba(255,255,255,.35); }
+
+/* ── Tabs ── */
+.tab-bar {
+  background: #fff;
+  border-bottom: 2px solid var(--paper-3);
+  display: flex;
+  padding: 0 32px;
+  overflow-x: auto;
+  position: sticky;
+  top: 57px;
+  z-index: 90;
+}
+.tab-btn {
+  padding: 14px 20px;
+  font-size: .875rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: none;
+  border: none;
+  border-bottom: 2.5px solid transparent;
+  margin-bottom: -2px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  transition: all .15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tab-btn:hover { color: var(--ink); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-btn .count {
+  font-size: .7rem;
+  background: var(--paper-2);
+  color: var(--ink-soft);
+  border-radius: 99px;
+  padding: 1px 7px;
+  font-family: var(--font-mono);
+}
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ── Loading ── */
+.loading-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px;
+  color: var(--ink-soft);
+  gap: 16px;
+}
+.spinner {
+  width: 36px; height: 36px;
+  border: 3px solid var(--paper-3);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: .9rem; }
+
+/* ── Overview Tab ── */
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.stat-card {
+  background: #fff;
+  border: 1px solid var(--paper-3);
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+}
+.stat-value {
+  font-family: var(--font-serif);
+  font-size: 2.4rem;
+  color: var(--ink);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.stat-label { font-size: .8rem; color: var(--ink-faint); font-weight: 500; text-transform: uppercase; letter-spacing: .06em; }
+.stat-card.pos .stat-value { color: var(--pos); }
+.stat-card.neg .stat-value { color: var(--neg); }
+.stat-card.neu .stat-value { color: var(--neu); }
+.stat-card.acc .stat-value { color: var(--accent); }
+
+.summary-box {
+  background: #fff;
+  border: 1px solid var(--paper-3);
+  border-radius: 10px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.summary-box h3 { font-size: .85rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-faint); margin-bottom: 12px; }
+.summary-text { font-size: .95rem; line-height: 1.7; color: var(--ink-soft); }
+
+.top-themes { display: flex; flex-direction: column; gap: 10px; }
+.theme-mini {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--paper);
+  border-radius: 8px;
+  font-size: .875rem;
+}
+.theme-mini .name { flex: 1; font-weight: 500; }
+.theme-mini .pts { font-family: var(--font-mono); font-size: .8rem; color: var(--ink-faint); }
+.sentiment-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dot-pos { background: var(--pos); }
+.dot-neg { background: var(--neg); }
+.dot-neu { background: var(--neu); }
+
+/* ── Themes Tab ── */
+.theme-search-wrap { margin-bottom: 20px; }
+.theme-search {
+  width: 100%;
+  border: 1.5px solid var(--paper-3);
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: .9rem;
+  font-family: var(--font-sans);
+  outline: none;
+}
+.theme-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(46,92,255,.1); }
+
+.theme-card {
+  background: #fff;
+  border: 1px solid var(--paper-3);
+  border-radius: 10px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.theme-header {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background .12s;
+}
+.theme-header:hover { background: var(--paper); }
+.theme-name { flex: 1; font-weight: 600; font-size: .95rem; }
+.theme-meta { font-size: .8rem; color: var(--ink-faint); font-family: var(--font-mono); }
+.theme-chevron { color: var(--ink-faint); transition: transform .2s; font-size: .9rem; }
+.theme-card.open .theme-chevron { transform: rotate(180deg); }
+
+.theme-body {
+  display: none;
+  border-top: 1px solid var(--paper-2);
+  padding: 4px 0 16px;
+}
+.theme-card.open .theme-body { display: block; }
+.theme-desc { padding: 12px 20px 16px; font-size: .85rem; color: var(--ink-soft); border-bottom: 1px solid var(--paper-2); }
+
+.point-row {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--paper-2);
+  font-size: .875rem;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.point-row:last-child { border-bottom: none; }
+.point-row .dot { margin-top: 7px; }
+.point-content { flex: 1; }
+.point-text { color: var(--ink-soft); line-height: 1.6; }
+.point-attr { margin-top: 4px; font-size: .75rem; color: var(--ink-faint); }
+.point-attr strong { color: var(--ink-soft); font-weight: 600; }
+
+/* ── Colleagues Tab ── */
+.sort-bar { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.sort-btn {
+  padding: 6px 14px;
+  border-radius: 99px;
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--paper-2);
+  color: var(--ink-soft);
+  border: none;
+  transition: all .15s;
+}
+.sort-btn.active { background: var(--accent); color: #fff; }
+
+.colleague-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.colleague-card {
+  background: #fff;
+  border: 1px solid var(--paper-3);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.colleague-head {
+  padding: 16px 20px;
+  cursor: pointer;
+  user-select: none;
+}
+.colleague-head:hover { background: var(--paper); }
+.colleague-name { font-weight: 700; font-size: 1rem; margin-bottom: 2px; }
+.colleague-role { font-size: .8rem; color: var(--ink-faint); margin-bottom: 12px; }
+.colleague-stats { display: flex; gap: 8px; }
+.colleague-stat { text-align: center; }
+.colleague-stat .val { font-family: var(--font-serif); font-size: 1.4rem; line-height: 1; }
+.colleague-stat .lbl { font-size: .7rem; text-transform: uppercase; color: var(--ink-faint); letter-spacing: .05em; }
+
+.colleague-body {
+  display: none;
+  border-top: 1px solid var(--paper-2);
+}
+.colleague-card.open .colleague-body { display: block; }
+
+/* ── Ask AI Tab ── */
+.ask-form { display: flex; gap: 10px; margin-bottom: 24px; }
+.ask-input {
+  flex: 1;
+  border: 1.5px solid var(--paper-3);
+  border-radius: 8px;
+  padding: 11px 16px;
+  font-size: .9rem;
+  font-family: var(--font-sans);
+  outline: none;
+}
+.ask-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(46,92,255,.1); }
+
+.examples-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+.example-chip {
+  padding: 6px 12px;
+  border-radius: 99px;
+  font-size: .78rem;
+  background: #edf1ff;
+  color: var(--accent);
+  cursor: pointer;
+  border: none;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  transition: background .12s;
+}
+.example-chip:hover { background: #d6deff; }
+
+.chat-history { display: flex; flex-direction: column; gap: 16px; }
+.chat-turn { background: #fff; border: 1px solid var(--paper-3); border-radius: 10px; overflow: hidden; }
+.chat-q { padding: 14px 18px; background: var(--paper); border-bottom: 1px solid var(--paper-2); font-weight: 600; font-size: .9rem; }
+.chat-a { padding: 14px 18px; font-size: .9rem; line-height: 1.7; white-space: pre-wrap; color: var(--ink-soft); }
+.chat-thinking { padding: 14px 18px; color: var(--ink-faint); font-size: .85rem; display: flex; align-items: center; gap: 8px; }
+
+/* ── Empty / Error states ── */
+.empty-state {
+  text-align: center;
+  padding: 60px 24px;
+  color: var(--ink-faint);
+}
+.empty-state h3 { font-family: var(--font-serif); font-size: 1.3rem; color: var(--ink-soft); margin-bottom: 6px; }
+.empty-state p { font-size: .875rem; }
+
+/* ── Refresh indicator ── */
+.refresh-notice {
+  display: none;
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--ink);
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 99px;
+  font-size: .85rem;
+  font-weight: 500;
+  z-index: 200;
+  cursor: pointer;
+  animation: slideUp .3s ease;
+  box-shadow: var(--shadow-lg);
+}
+.refresh-notice.visible { display: flex; align-items: center; gap: 8px; }
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .dash-hero { padding: 20px; }
+  .tab-bar { padding: 0 16px; }
+  .colleague-grid { grid-template-columns: 1fr; }
+}
+
+.padded { padding: 28px 32px; }
+@media (max-width: 640px) { .padded { padding: 20px; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dash-hero">
+  <div>
+    <h1>Feedback Dashboard</h1>
+    <div class="meta" id="metaLine">Loading submissions…</div>
+  </div>
+  <div class="dash-actions">
+    <a href="/export/json" class="export-btn">⬇ JSON</a>
+    <a href="/export/csv" class="export-btn">⬇ CSV</a>
+    <a href="/export/html" class="export-btn">⬇ HTML Report</a>
+    <button class="export-btn" onclick="refreshData(true)">↺ Refresh</button>
+  </div>
+</div>
+
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('overview', this)">
+    Overview
+  </button>
+  <button class="tab-btn" onclick="switchTab('themes', this)">
+    Themes <span class="count" id="themeCount">–</span>
+  </button>
+  <button class="tab-btn" onclick="switchTab('colleagues', this)">
+    Colleagues <span class="count" id="colCount">–</span>
+  </button>
+  <button class="tab-btn" onclick="switchTab('ask', this)">
+    Ask AI
+  </button>
+</div>
+
+<!-- ───── Overview Tab ───── -->
+<div id="tab-overview" class="tab-content active">
+  <div class="padded">
+    <div id="overviewLoading" class="loading-wrap">
+      <div class="spinner"></div>
+      <div class="loading-text">Analysing feedback with Claude…</div>
+    </div>
+    <div id="overviewContent" style="display:none">
+      <div class="overview-grid" id="statsGrid"></div>
+      <div class="summary-box">
+        <h3>Executive Summary</h3>
+        <div class="summary-text" id="execSummary">–</div>
+      </div>
+      <div class="summary-box">
+        <h3>Top Themes</h3>
+        <div class="top-themes" id="topThemes"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ───── Themes Tab ───── -->
+<div id="tab-themes" class="tab-content">
+  <div class="padded">
+    <div class="theme-search-wrap">
+      <input type="text" class="theme-search" id="themeSearch" placeholder="Search themes…" oninput="filterThemes()">
+    </div>
+    <div id="themesContainer">
+      <div class="loading-wrap"><div class="spinner"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ───── Colleagues Tab ───── -->
+<div id="tab-colleagues" class="tab-content">
+  <div class="padded">
+    <div class="sort-bar">
+      <button class="sort-btn active" onclick="sortColleagues('name', this)">A–Z</button>
+      <button class="sort-btn" onclick="sortColleagues('points', this)">Most Points</button>
+      <button class="sort-btn" onclick="sortColleagues('positive', this)">Most Positive</button>
+    </div>
+    <div class="colleague-grid" id="colleagueGrid">
+      <div class="loading-wrap"><div class="spinner"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ───── Ask AI Tab ───── -->
+<div id="tab-ask" class="tab-content">
+  <div class="padded">
+    <div class="ask-form">
+      <input type="text" class="ask-input" id="askInput" placeholder="Ask a question about the feedback…" onkeydown="if(event.key==='Enter')sendQuestion()">
+      <button class="btn btn-primary" onclick="sendQuestion()">Ask →</button>
+    </div>
+    <div class="examples-row">
+      <button class="example-chip" onclick="prefill('Which colleagues mentioned jargon issues?')">Jargon issues</button>
+      <button class="example-chip" onclick="prefill('What are the top 3 improvement suggestions?')">Top suggestions</button>
+      <button class="example-chip" onclick="prefill('Is the time estimate considered accurate?')">Time estimate</button>
+      <button class="example-chip" onclick="prefill('Who provided the most feedback?')">Most feedback</button>
+      <button class="example-chip" onclick="prefill('Which questions were flagged as problematic?')">Problematic questions</button>
+      <button class="example-chip" onclick="prefill('Summarise the positive feedback.')">Positive summary</button>
+    </div>
+    <div class="chat-history" id="chatHistory"></div>
+  </div>
+</div>
+
+<!-- Refresh notice -->
+<div class="refresh-notice" id="refreshNotice" onclick="refreshData(true)">
+  🔔 New submissions detected — click to refresh
+</div>
+
+<script>
+let state = null; // full analysis data
+let pollInterval = null;
+let lastHash = null;
+
+// ── Tab switching ──
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── Initial load ──
+document.addEventListener('DOMContentLoaded', () => {
+  refreshData(false);
+  startPolling();
+});
+
+async function refreshData(force) {
+  try {
+    const url = '/api/data' + (force ? '?force=1' : '');
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data.error) { showError(data.error); return; }
+    state = data;
+    renderAll();
+    document.getElementById('refreshNotice').classList.remove('visible');
+  } catch(e) {
+    showError('Failed to load data: ' + e.message);
+  }
+}
+
+function showError(msg) {
+  document.getElementById('overviewLoading').innerHTML = `<div style="color:var(--neg);text-align:center;padding:40px">${msg}</div>`;
+}
+
+// ── Polling ──
+function startPolling() {
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(async () => {
+    try {
+      const resp = await fetch('/api/check');
+      const d = await resp.json();
+      if (d.changed && d.current_hash !== lastHash) {
+        document.getElementById('refreshNotice').classList.add('visible');
+      }
+    } catch(e) {}
+  }, 30000);
+}
+
+// ── Render all ──
+function renderAll() {
+  const a = state.analysis;
+  const count = state.submission_count;
+  lastHash = null; // reset so refresh notice clears
+
+  // Meta line
+  const processed = state.last_processed ? new Date(state.last_processed * 1000).toLocaleTimeString() : '–';
+  document.getElementById('metaLine').textContent =
+    `${count} submission${count !== 1 ? 's' : ''} · Last processed ${processed}`;
+
+  // Counts for tabs
+  document.getElementById('themeCount').textContent = (a.themes || []).length;
+  document.getElementById('colCount').textContent = (a.colleague_summaries || []).length;
+
+  renderOverview(a);
+  renderThemes(a.themes || []);
+  renderColleagues(a.colleague_summaries || []);
+}
+
+// ── Overview ──
+function renderOverview(a) {
+  document.getElementById('overviewLoading').style.display = 'none';
+  document.getElementById('overviewContent').style.display = 'block';
+
+  const s = a.sentiment_counts || {};
+  const total = (s.positive || 0) + (s.neutral || 0) + (s.negative || 0);
+
+  const grid = document.getElementById('statsGrid');
+  grid.innerHTML = `
+    <div class="stat-card">
+      <div class="stat-value">${state.submission_count}</div>
+      <div class="stat-label">Submissions</div>
+    </div>
+    <div class="stat-card acc">
+      <div class="stat-value">${a.total_feedback_points || 0}</div>
+      <div class="stat-label">Feedback Points</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${a.total_suggestions || 0}</div>
+      <div class="stat-label">Suggestions</div>
+    </div>
+    <div class="stat-card pos">
+      <div class="stat-value">${s.positive || 0}</div>
+      <div class="stat-label">Positive</div>
+    </div>
+    <div class="stat-card neu">
+      <div class="stat-value">${s.neutral || 0}</div>
+      <div class="stat-label">Neutral</div>
+    </div>
+    <div class="stat-card neg">
+      <div class="stat-value">${s.negative || 0}</div>
+      <div class="stat-label">Negative</div>
+    </div>
+  `;
+
+  document.getElementById('execSummary').textContent = a.executive_summary || 'No summary available.';
+
+  const themes = (a.themes || []).slice(0, 5);
+  const topEl = document.getElementById('topThemes');
+  if (!themes.length) {
+    topEl.innerHTML = '<div style="color:var(--ink-faint);font-size:.85rem">No themes identified yet.</div>';
+    return;
+  }
+  topEl.innerHTML = themes.map(t => `
+    <div class="theme-mini">
+      <div class="sentiment-dot dot-${t.sentiment || 'neu'}"></div>
+      <div class="name">${esc(t.theme)}</div>
+      <div class="pts">${(t.points || []).length} pt${(t.points || []).length !== 1 ? 's' : ''}</div>
+      <div class="badge badge-${t.sentiment || 'neu'}">${t.sentiment || 'neutral'}</div>
+    </div>`).join('');
+}
+
+// ── Themes ──
+let allThemes = [];
+function renderThemes(themes) {
+  allThemes = themes;
+  drawThemes(themes);
+}
+function drawThemes(themes) {
+  const container = document.getElementById('themesContainer');
+  if (!themes.length) {
+    container.innerHTML = '<div class="empty-state"><h3>No themes yet</h3><p>Submit some feedback to see themes appear here.</p></div>';
+    return;
+  }
+  container.innerHTML = themes.map((t, i) => {
+    const pts = t.points || [];
+    return `
+    <div class="theme-card" id="thm-${i}">
+      <div class="theme-header" onclick="toggleTheme(${i})">
+        <div class="sentiment-dot dot-${t.sentiment || 'neu'}"></div>
+        <div class="theme-name">${esc(t.theme)}</div>
+        <div class="badge badge-${t.sentiment || 'neu'}">${t.sentiment || 'neutral'}</div>
+        <div class="theme-meta">${pts.length} point${pts.length !== 1 ? 's' : ''}</div>
+        <div class="theme-chevron">▾</div>
+      </div>
+      <div class="theme-body">
+        ${t.description ? `<div class="theme-desc">${esc(t.description)}</div>` : ''}
+        ${pts.map(p => `
+          <div class="point-row">
+            <div class="sentiment-dot dot-${p.sentiment || 'neu'} dot"></div>
+            <div class="point-content">
+              <div class="point-text">${esc(p.text)}</div>
+              <div class="point-attr"><strong>${esc(p.contributor_name)}</strong> · ${esc(p.contributor_role || '–')} · <em>${esc(p.field || '')}</em></div>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+function toggleTheme(i) {
+  document.getElementById('thm-' + i).classList.toggle('open');
+}
+function filterThemes() {
+  const q = document.getElementById('themeSearch').value.toLowerCase();
+  const filtered = q ? allThemes.filter(t => t.theme.toLowerCase().includes(q) || (t.description||'').toLowerCase().includes(q)) : allThemes;
+  drawThemes(filtered);
+}
+
+// ── Colleagues ──
+let allColleagues = [];
+function renderColleagues(colleagues) {
+  allColleagues = colleagues;
+  drawColleagues(colleagues);
+}
+function sortColleagues(by, btn) {
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  let sorted = [...allColleagues];
+  if (by === 'name') sorted.sort((a,b) => a.contributor_name.localeCompare(b.contributor_name));
+  if (by === 'points') sorted.sort((a,b) => (b.points||[]).length - (a.points||[]).length);
+  if (by === 'positive') sorted.sort((a,b) => (b.positive_count||0) - (a.positive_count||0));
+  drawColleagues(sorted);
+}
+function drawColleagues(colleagues) {
+  const grid = document.getElementById('colleagueGrid');
+  if (!colleagues.length) {
+    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><h3>No submissions yet</h3><p>Share the form link with your colleagues.</p></div>';
+    return;
+  }
+  grid.innerHTML = colleagues.map((c, i) => {
+    const pts = c.points || [];
+    const posCount = c.positive_count || 0;
+    const negCount = c.negative_count || 0;
+    const neuCount = c.neutral_count || 0;
+    return `
+    <div class="colleague-card" id="col-${i}">
+      <div class="colleague-head" onclick="toggleColleague(${i})">
+        <div class="colleague-name">${esc(c.contributor_name)}</div>
+        <div class="colleague-role">${esc(c.contributor_role || '–')} ${c.contributor_email ? '· ' + esc(c.contributor_email) : ''}</div>
+        <div class="colleague-stats">
+          <div class="colleague-stat">
+            <div class="val">${pts.length}</div>
+            <div class="lbl">Points</div>
+          </div>
+          <div class="colleague-stat" style="color:var(--pos)">
+            <div class="val">${posCount}</div>
+            <div class="lbl">Positive</div>
+          </div>
+          <div class="colleague-stat" style="color:var(--neg)">
+            <div class="val">${negCount}</div>
+            <div class="lbl">Negative</div>
+          </div>
+        </div>
+        ${c.overall_rating ? `<div style="margin-top:10px"><span class="badge badge-accent">${esc(c.overall_rating)}</span></div>` : ''}
+      </div>
+      <div class="colleague-body">
+        ${c.summary ? `<div class="theme-desc">${esc(c.summary)}</div>` : ''}
+        ${pts.map(p => `
+          <div class="point-row">
+            <div class="sentiment-dot dot-${p.sentiment || 'neu'} dot"></div>
+            <div class="point-content">
+              <div class="point-text">${esc(p.text)}</div>
+              <div class="point-attr"><em>${esc(p.field || '')}</em></div>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+function toggleColleague(i) {
+  document.getElementById('col-' + i).classList.toggle('open');
+}
+
+// ── Ask AI ──
+const chatHistory = [];
+async function sendQuestion() {
+  const input = document.getElementById('askInput');
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+
+  const histEl = document.getElementById('chatHistory');
+  const turn = document.createElement('div');
+  turn.className = 'chat-turn';
+  turn.innerHTML = `
+    <div class="chat-q">${esc(q)}</div>
+    <div class="chat-thinking"><div class="spinner" style="width:18px;height:18px;border-width:2px"></div> Thinking…</div>`;
+  histEl.prepend(turn);
+
+  try {
+    const resp = await fetch('/ask', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({question: q})
+    });
+    const d = await resp.json();
+    const thinking = turn.querySelector('.chat-thinking');
+    thinking.outerHTML = `<div class="chat-a">${esc(d.answer || d.error || 'No response')}</div>`;
+  } catch(e) {
+    turn.querySelector('.chat-thinking').outerHTML = `<div class="chat-a" style="color:var(--neg)">Error: ${e.message}</div>`;
+  }
+}
+
+function prefill(text) {
+  document.getElementById('askInput').value = text;
+  document.getElementById('askInput').focus();
+}
+
+// ── Utility ──
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: apm-feedback-system
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: DASHBOARD_PASSWORD
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+    disk:
+      name: feedback-data
+      mountPath: /opt/render/project/src/feedback_submissions
+      sizeGB: 1

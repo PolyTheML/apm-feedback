@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Dashboard Login — APM Feedback{% endblock %}
+{% block extra_head %}
+<style>
+.login-wrap {
+  display: flex; align-items: center; justify-content: center;
+  min-height: calc(100vh - 57px);
+  padding: 40px 24px;
+  background: linear-gradient(135deg, #0f1117 0%, #1a2540 100%);
+}
+.login-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 48px 40px;
+  max-width: 380px;
+  width: 100%;
+  box-shadow: 0 24px 64px rgba(0,0,0,.3);
+}
+.login-card h1 {
+  font-family: var(--font-serif);
+  font-size: 1.7rem;
+  margin-bottom: 6px;
+}
+.login-card p { font-size: .875rem; color: var(--ink-soft); margin-bottom: 28px; }
+.login-card label { display: block; font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); margin-bottom: 6px; }
+.login-card input {
+  width: 100%; border: 1.5px solid var(--paper-3); border-radius: 8px;
+  padding: 11px 14px; font-size: .95rem; font-family: var(--font-sans);
+  outline: none; margin-bottom: 16px;
+}
+.login-card input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(46,92,255,.1); }
+.login-card .btn { width: 100%; justify-content: center; }
+.error-box { background: #fdeaea; color: var(--neg); border-radius: 8px; padding: 10px 14px; font-size: .85rem; margin-bottom: 16px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <div class="login-card">
+    <h1>Dashboard Login</h1>
+    <p>Enter the password to access the feedback dashboard.</p>
+    {% if error %}<div class="error-box">{{ error }}</div>{% endif %}
+    <form method="POST">
+      <label>Password</label>
+      <input type="password" name="password" placeholder="Enter password" autofocus required>
+      <button type="submit" class="btn btn-primary btn-lg">Access Dashboard →</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
