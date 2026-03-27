@@ -408,7 +408,9 @@
   <div class="padded">
     <div class="summary-box theme-chart-box" id="themeChartBox">
       <h3>Theme Breakdown</h3>
-      <canvas id="themeBarChart"></canvas>
+      <div id="themeChartWrap" style="position:relative">
+        <canvas id="themeBarChart"></canvas>
+      </div>
     </div>
     <div class="theme-search-wrap">
       <input type="text" class="theme-search" id="themeSearch" placeholder="Search themes…" oninput="filterThemes()">
@@ -792,7 +794,8 @@ function renderThemeBar(themes) {
   if (!themes.length) { box.style.display = 'none'; return; }
   box.style.display = 'block';
   const canvas = document.getElementById('themeBarChart');
-  canvas.style.height = Math.max(160, themes.length * 36) + 'px';
+  const wrap = document.getElementById('themeChartWrap');
+  wrap.style.height = Math.max(160, themes.length * 36) + 'px';
   if (themeChartInst) { themeChartInst.destroy(); themeChartInst = null; }
   const labels = themes.map(t => t.theme);
   const posData = themes.map(t => (t.points||[]).filter(p => p.sentiment==='positive').length);
