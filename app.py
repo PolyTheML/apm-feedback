@@ -137,9 +137,6 @@ Please analyse this feedback and return ONLY a valid JSON object (no markdown, n
         }}
       ]
     }}
-  ],
-  "word_frequencies": [
-    {{"word": "term", "weight": <integer 1-10>}}
   ]
 }}
 
@@ -148,8 +145,7 @@ IMPORTANT RULES:
 2. Themes should be meaningful groupings (e.g., "Jargon & Terminology", "Question Clarity", "Time Estimate", "Structure & Flow", "Specific Questions", "Positive Feedback").
 3. Count each distinct feedback point separately.
 4. Attribute every point to the exact contributor.
-5. For word_frequencies: extract the 40 most significant words and short phrases from the feedback text. Exclude common stop words (the, and, is, to, a, of, in, etc.) and filler words. Merge similar forms (e.g. "question"/"questions" → "questions"). Weight 1–10 reflecting relative frequency and importance across all submissions.
-6. Return ONLY the JSON object, nothing else."""
+5. Return ONLY the JSON object, nothing else."""
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
@@ -173,8 +169,7 @@ def empty_analysis():
         "total_suggestions": 0,
         "sentiment_counts": {"positive": 0, "neutral": 0, "negative": 0},
         "themes": [],
-        "colleague_summaries": [],
-        "word_frequencies": []
+        "colleague_summaries": []
     }
 
 

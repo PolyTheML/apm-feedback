@@ -3,7 +3,6 @@
 
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/wordcloud@1.2.2/src/wordcloud2.js"></script>
 <style>
 .charts-row {
   display: flex;
@@ -14,7 +13,6 @@
 .charts-row .summary-box { margin-bottom: 0; }
 .donut-box { flex: 0 0 220px; }
 .donut-box canvas { max-width: 180px; margin: 0 auto; display: block; }
-.wordcloud-box canvas { display: block; width: 100% !important; border-radius: 6px; }
 @media (max-width: 640px) {
   .charts-row { flex-direction: column; }
   .donut-box { flex: none; width: 100%; }
@@ -395,10 +393,6 @@
         <h3>Top Themes</h3>
         <div class="top-themes" id="topThemes"></div>
       </div>
-      <div class="summary-box wordcloud-box" id="wordcloudBox" style="display:none">
-        <h3>Key Terms</h3>
-        <canvas id="wordcloudCanvas" width="600" height="300"></canvas>
-      </div>
     </div>
   </div>
 </div>
@@ -568,7 +562,6 @@ function renderOverview(a) {
 
   document.getElementById('execSummary').textContent = a.executive_summary || 'No summary available.';
   renderSentimentDonut(a);
-  renderWordCloud(a.word_frequencies || []);
 
   const themes = (a.themes || []).slice(0, 5);
   const topEl = document.getElementById('topThemes');
@@ -759,35 +752,6 @@ function renderSentimentDonut(a) {
   });
 }
 
-function renderWordCloud(wordFreqs) {
-  const box = document.getElementById('wordcloudBox');
-  if (!wordFreqs || !wordFreqs.length) { box.style.display = 'none'; return; }
-  box.style.display = 'block';
-
-  const canvas = document.getElementById('wordcloudCanvas');
-  // Scale canvas to container width for crisp rendering
-  const w = canvas.parentElement.clientWidth - 48;
-  canvas.width = w;
-  canvas.height = Math.round(w * 0.45);
-
-  // Map weight 1–10 → font size range proportional to canvas width
-  const maxWeight = Math.max(...wordFreqs.map(f => f.weight));
-  const list = wordFreqs.map(f => [f.word, Math.round((f.weight / maxWeight) * (w * 0.08) + (w * 0.02))]);
-
-  const palette = ['#2e5cff','#0d9f6e','#d94f4f','#7b8098','#f59e0b','#6366f1','#0891b2'];
-  WordCloud(canvas, {
-    list,
-    gridSize: Math.round(w / 60),
-    weightFactor: 1,
-    fontFamily: 'DM Sans, sans-serif',
-    color: () => palette[Math.floor(Math.random() * palette.length)],
-    rotateRatio: 0.3,
-    rotationSteps: 2,
-    backgroundColor: '#f8f9fb',
-    drawOutOfBound: false,
-    shuffle: true,
-  });
-}
 
 function renderThemeBar(themes) {
   const box = document.getElementById('themeChartBox');
