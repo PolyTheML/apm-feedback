@@ -18,6 +18,7 @@ from flask import (
     redirect, url_for, send_file, make_response, session
 )
 import anthropic
+from supabase import create_client
 
 # ──────────────────────────────────────────────────────────
 # App Setup
@@ -26,10 +27,12 @@ import anthropic
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "apm-feedback-secret-2024")
 
-SUBMISSIONS_DIR = Path("feedback_submissions")
-SUBMISSIONS_DIR.mkdir(exist_ok=True)
-
 DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")  # empty = no password
+
+supabase = create_client(
+    os.environ.get("SUPABASE_URL", ""),
+    os.environ.get("SUPABASE_KEY", "")
+)
 
 # In-memory cache
 _cache = {
@@ -61,21 +64,17 @@ def require_dashboard_auth(f):
 # ──────────────────────────────────────────────────────────
 
 def get_submissions():
-    """Read all JSON submissions from folder."""
+    """Read all submissions from Supabase."""
+    response = supabase.table("submissions").select("*").order("timestamp").execute()
     submissions = []
-    for path in sorted(SUBMISSIONS_DIR.glob("*.json")):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                data["_filename"] = path.name
-                submissions.append(data)
-        except Exception:
-            pass
+    for row in response.data:
+        row["_id"] = row["id"]
+        submissions.append(row)
     return submissions
 
 
 def submissions_hash(submissions):
-    raw = json.dumps([s.get("_filename") for s in submissions], sort_keys=True)
+    raw = json.dumps([s.get("_id") for s in submissions], sort_keys=True)
     return hashlib.md5(raw.encode()).hexdigest()
 
 
@@ -217,13 +216,8 @@ def submit():
     if not contributor_name:
         return jsonify({"error": "Name is required"}), 400
 
-    timestamp = datetime.now().isoformat()
-    safe_name = "".join(c for c in contributor_name if c.isalnum() or c in " _-").replace(" ", "_")
-    ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{safe_name}_{ts_str}.json"
-
-    submission = {
-        "timestamp": timestamp,
+    supabase.table("submissions").insert({
+        "timestamp": datetime.now().isoformat(),
         "contributor_name": contributor_name,
         "contributor_role": contributor_role,
         "contributor_email": contributor_email,
@@ -239,10 +233,7 @@ def submit():
             "overall": data.get("overall", ""),
             "additional": data.get("additional", ""),
         }
-    }
-
-    with open(SUBMISSIONS_DIR / filename, "w", encoding="utf-8") as f:
-        json.dump(submission, f, indent=2, ensure_ascii=False)
+    }).execute()
 
     return jsonify({"success": True, "message": "Feedback submitted successfully!"})
 
