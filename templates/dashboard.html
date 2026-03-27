@@ -2,6 +2,26 @@
 {% block title %}Dashboard — APM Feedback{% endblock %}
 
 {% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/wordcloud@1.2.2/src/wordcloud2.js"></script>
+<style>
+.charts-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  align-items: flex-start;
+}
+.charts-row .summary-box { margin-bottom: 0; }
+.donut-box { flex: 0 0 220px; }
+.donut-box canvas { max-width: 180px; margin: 0 auto; display: block; }
+.wordcloud-box canvas { display: block; width: 100% !important; border-radius: 6px; }
+@media (max-width: 640px) {
+  .charts-row { flex-direction: column; }
+  .donut-box { flex: none; width: 100%; }
+}
+.theme-chart-box { margin-bottom: 20px; }
+.theme-chart-box canvas { width: 100% !important; }
+</style>
 <style>
 /* ── Layout ── */
 .dash-hero {
@@ -361,13 +381,23 @@
     </div>
     <div id="overviewContent" style="display:none">
       <div class="overview-grid" id="statsGrid"></div>
-      <div class="summary-box">
-        <h3>Executive Summary</h3>
-        <div class="summary-text" id="execSummary">–</div>
+      <div class="charts-row">
+        <div class="summary-box" style="flex:1">
+          <h3>Executive Summary</h3>
+          <div class="summary-text" id="execSummary">–</div>
+        </div>
+        <div class="summary-box donut-box">
+          <h3>Sentiment</h3>
+          <canvas id="sentimentChart"></canvas>
+        </div>
       </div>
       <div class="summary-box">
         <h3>Top Themes</h3>
         <div class="top-themes" id="topThemes"></div>
+      </div>
+      <div class="summary-box wordcloud-box" id="wordcloudBox" style="display:none">
+        <h3>Key Terms</h3>
+        <canvas id="wordcloudCanvas" width="600" height="300"></canvas>
       </div>
     </div>
   </div>
@@ -376,6 +406,10 @@
 <!-- ───── Themes Tab ───── -->
 <div id="tab-themes" class="tab-content">
   <div class="padded">
+    <div class="summary-box theme-chart-box" id="themeChartBox">
+      <h3>Theme Breakdown</h3>
+      <canvas id="themeBarChart"></canvas>
+    </div>
     <div class="theme-search-wrap">
       <input type="text" class="theme-search" id="themeSearch" placeholder="Search themes…" oninput="filterThemes()">
     </div>
@@ -531,6 +565,8 @@ function renderOverview(a) {
   `;
 
   document.getElementById('execSummary').textContent = a.executive_summary || 'No summary available.';
+  renderSentimentDonut(a);
+  renderWordCloud(a.word_frequencies || []);
 
   const themes = (a.themes || []).slice(0, 5);
   const topEl = document.getElementById('topThemes');
@@ -551,6 +587,7 @@ function renderOverview(a) {
 let allThemes = [];
 function renderThemes(themes) {
   allThemes = themes;
+  renderThemeBar(themes);
   drawThemes(themes);
 }
 function drawThemes(themes) {
@@ -691,6 +728,98 @@ async function sendQuestion() {
 function prefill(text) {
   document.getElementById('askInput').value = text;
   document.getElementById('askInput').focus();
+}
+
+// ── Charts ──
+let sentimentChartInst = null;
+let themeChartInst = null;
+
+function renderSentimentDonut(a) {
+  const s = a.sentiment_counts || {};
+  const pos = s.positive || 0;
+  const neu = s.neutral || 0;
+  const neg = s.negative || 0;
+  if (sentimentChartInst) { sentimentChartInst.destroy(); sentimentChartInst = null; }
+  if (pos + neu + neg === 0) return;
+  const ctx = document.getElementById('sentimentChart').getContext('2d');
+  sentimentChartInst = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Positive', 'Neutral', 'Negative'],
+      datasets: [{ data: [pos, neu, neg], backgroundColor: ['#0d9f6e', '#7b8098', '#d94f4f'], borderWidth: 0 }]
+    },
+    options: {
+      cutout: '65%',
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10, boxWidth: 12 } } },
+      responsive: true,
+      maintainAspectRatio: true,
+    }
+  });
+}
+
+function renderWordCloud(wordFreqs) {
+  const box = document.getElementById('wordcloudBox');
+  if (!wordFreqs || !wordFreqs.length) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+
+  const canvas = document.getElementById('wordcloudCanvas');
+  // Scale canvas to container width for crisp rendering
+  const w = canvas.parentElement.clientWidth - 48;
+  canvas.width = w;
+  canvas.height = Math.round(w * 0.45);
+
+  // Map weight 1–10 → font size range proportional to canvas width
+  const maxWeight = Math.max(...wordFreqs.map(f => f.weight));
+  const list = wordFreqs.map(f => [f.word, Math.round((f.weight / maxWeight) * (w * 0.08) + (w * 0.02))]);
+
+  const palette = ['#2e5cff','#0d9f6e','#d94f4f','#7b8098','#f59e0b','#6366f1','#0891b2'];
+  WordCloud(canvas, {
+    list,
+    gridSize: Math.round(w / 60),
+    weightFactor: 1,
+    fontFamily: 'DM Sans, sans-serif',
+    color: () => palette[Math.floor(Math.random() * palette.length)],
+    rotateRatio: 0.3,
+    rotationSteps: 2,
+    backgroundColor: '#f8f9fb',
+    drawOutOfBound: false,
+    shuffle: true,
+  });
+}
+
+function renderThemeBar(themes) {
+  const box = document.getElementById('themeChartBox');
+  if (!themes.length) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  const canvas = document.getElementById('themeBarChart');
+  canvas.style.height = Math.max(160, themes.length * 36) + 'px';
+  if (themeChartInst) { themeChartInst.destroy(); themeChartInst = null; }
+  const labels = themes.map(t => t.theme);
+  const posData = themes.map(t => (t.points||[]).filter(p => p.sentiment==='positive').length);
+  const neuData = themes.map(t => (t.points||[]).filter(p => p.sentiment==='neutral').length);
+  const negData = themes.map(t => (t.points||[]).filter(p => p.sentiment==='negative').length);
+  const ctx = canvas.getContext('2d');
+  themeChartInst = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Positive', data: posData, backgroundColor: '#0d9f6e' },
+        { label: 'Neutral',  data: neuData, backgroundColor: '#7b8098' },
+        { label: 'Negative', data: negData, backgroundColor: '#d94f4f' },
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      scales: {
+        x: { stacked: true, ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: 'rgba(0,0,0,.06)' } },
+        y: { stacked: true, ticks: { font: { size: 11 } } }
+      },
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10, boxWidth: 12 } } },
+      responsive: true,
+      maintainAspectRatio: false,
+    }
+  });
 }
 
 // ── Utility ──
