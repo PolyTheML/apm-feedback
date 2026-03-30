@@ -19,7 +19,7 @@ from flask import (
     redirect, url_for, send_file, make_response, session
 )
 import anthropic
-from supabase import create_client
+from supabase import create_client, ClientOptions
 
 # ──────────────────────────────────────────────────────────
 # App Setup
@@ -32,7 +32,8 @@ DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")  # empty = no pass
 
 supabase = create_client(
     os.environ.get("SUPABASE_URL", ""),
-    os.environ.get("SUPABASE_KEY", "")
+    os.environ.get("SUPABASE_KEY", ""),
+    options=ClientOptions(postgrest_client_timeout=10)
 )
 
 # In-memory cache
@@ -345,14 +346,24 @@ def api_data():
 @require_dashboard_auth
 def api_check():
     """Lightweight check — has data changed?"""
-    submissions = get_submissions()
-    h = submissions_hash(submissions)
-    changed = h != _cache["last_hash"]
-    return jsonify({
-        "changed": changed,
-        "submission_count": len(submissions),
-        "current_hash": h
-    })
+    try:
+        submissions = get_submissions()
+        h = submissions_hash(submissions)
+        changed = h != _cache["last_hash"]
+        return jsonify({
+            "changed": changed,
+            "submission_count": len(submissions),
+            "current_hash": h
+        })
+    except Exception as e:
+        # On Supabase timeout/error return a safe no-change response so the
+        # client doesn't show a spurious notification or crash the worker.
+        return jsonify({
+            "changed": False,
+            "submission_count": None,
+            "current_hash": _cache["last_hash"],
+            "error": str(e)
+        })
 
 
 @app.route("/ask", methods=["POST"])
