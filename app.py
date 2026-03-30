@@ -97,7 +97,14 @@ Here are all feedback submissions in JSON format:
 Please analyse this feedback and return ONLY a valid JSON object (no markdown, no backticks) with this exact structure:
 
 {{
-  "executive_summary": "A concise 3-5 sentence executive summary of all feedback combined.",
+  "gm_headline": "One clear, direct sentence summarising the overall verdict for a senior manager who has 10 seconds to read it. Lead with the overall sentiment, name the biggest strength and biggest concern. Example style: 'Colleagues find the questionnaire well-structured and relevant, but consistently flag jargon and unclear time expectations as barriers to completion.'",
+  "overall_sentiment": "positive OR mixed OR negative — choose based on the balance of sentiment counts",
+  "executive_summary": "Three structured paragraphs: (1) Overall picture — what respondents think of the assessment in plain language. (2) Key strengths — what is working well, with specific examples. (3) Key concerns and recommendations — what needs to change and concrete actions to take. Write for a general manager with no technical background. Use plain language, no jargon.",
+  "top_recommendations": [
+    "Specific, actionable recommendation 1 — start with a verb, be concrete",
+    "Specific, actionable recommendation 2",
+    "Specific, actionable recommendation 3"
+  ],
   "total_feedback_points": <integer>,
   "total_suggestions": <integer>,
   "sentiment_counts": {{
@@ -167,7 +174,10 @@ IMPORTANT RULES:
 
 def empty_analysis():
     return {
+        "gm_headline": "No submissions received yet.",
+        "overall_sentiment": "neutral",
         "executive_summary": "No submissions received yet.",
+        "top_recommendations": [],
         "total_feedback_points": 0,
         "total_suggestions": 0,
         "sentiment_counts": {"positive": 0, "neutral": 0, "negative": 0},
