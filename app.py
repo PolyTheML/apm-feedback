@@ -243,12 +243,6 @@ def get_analysis(force=False):
                 daemon=True,
             ).start()
 
-    # Wait briefly (up to 2 s) — catches fast completions and avoids an
-    # immediate stale-data flash when the previous run is nearly done.
-    deadline = time.time() + 2.0
-    while _cache["status"] == "running" and time.time() < deadline:
-        time.sleep(0.1)
-
     return _cache["analysis"] or empty_analysis(), submissions
 
 
