@@ -640,6 +640,98 @@ def export_xlsx():
         for cell in row:
             cell.alignment = Alignment(wrap_text=True, vertical="top")
 
+    # ── Charts Sheet (inserted at front) ──
+    from openpyxl.chart import PieChart, BarChart, Reference
+
+    wsc = wb.create_sheet("Charts", 0)
+    wsc.sheet_view.showGridLines = False
+
+    # Sentiment data table (A1:B4)
+    for r, (label, val) in enumerate([
+        ("Sentiment", "Count"),
+        ("Positive",  sc.get("positive", 0)),
+        ("Neutral",   sc.get("neutral", 0)),
+        ("Negative",  sc.get("negative", 0)),
+    ], start=1):
+        wsc.cell(row=r, column=1).value = label
+        wsc.cell(row=r, column=2).value = val
+    wsc.cell(1, 1).font = Font(bold=True)
+    wsc.cell(1, 2).font = Font(bold=True)
+
+    pie = PieChart()
+    pie.title = "Overall Sentiment"
+    pie.style = 10
+    pie.add_data(Reference(wsc, min_col=2, min_row=1, max_row=4), titles_from_data=True)
+    pie.set_categories(Reference(wsc, min_col=1, min_row=2, max_row=4))
+    pie.width = 16
+    pie.height = 12
+    wsc.add_chart(pie, "D1")
+
+    # Theme data table
+    themes = analysis.get("themes", [])
+    theme_row = 6
+    wsc.cell(row=theme_row, column=1).value = "Theme"
+    wsc.cell(row=theme_row, column=2).value = "Points"
+    wsc.cell(theme_row, 1).font = Font(bold=True)
+    wsc.cell(theme_row, 2).font = Font(bold=True)
+    for i, t in enumerate(themes):
+        wsc.cell(row=theme_row + 1 + i, column=1).value = t.get("theme", "")
+        wsc.cell(row=theme_row + 1 + i, column=2).value = len(t.get("points", []))
+
+    if themes:
+        bar = BarChart()
+        bar.type = "col"
+        bar.title = "Feedback Points by Theme"
+        bar.y_axis.title = "Points"
+        bar.style = 10
+        bar.add_data(
+            Reference(wsc, min_col=2, min_row=theme_row, max_row=theme_row + len(themes)),
+            titles_from_data=True,
+        )
+        bar.set_categories(
+            Reference(wsc, min_col=1, min_row=theme_row + 1, max_row=theme_row + len(themes))
+        )
+        bar.width = 22
+        bar.height = 14
+        wsc.add_chart(bar, "D14")
+
+    # Colleague sentiment data table
+    colleagues = analysis.get("colleague_summaries", [])
+    col_row = theme_row + len(themes) + 3
+    for col_idx, label in enumerate(["Colleague", "Positive", "Neutral", "Negative"], start=1):
+        cell = wsc.cell(row=col_row, column=col_idx)
+        cell.value = label
+        cell.font = Font(bold=True)
+    for i, c in enumerate(colleagues):
+        wsc.cell(row=col_row + 1 + i, column=1).value = c.get("contributor_name", "")
+        wsc.cell(row=col_row + 1 + i, column=2).value = c.get("positive_count", 0)
+        wsc.cell(row=col_row + 1 + i, column=3).value = c.get("neutral_count", 0)
+        wsc.cell(row=col_row + 1 + i, column=4).value = c.get("negative_count", 0)
+
+    if colleagues:
+        bar2 = BarChart()
+        bar2.type = "col"
+        bar2.grouping = "stacked"
+        bar2.overlap = 100
+        bar2.title = "Sentiment by Colleague"
+        bar2.y_axis.title = "Points"
+        bar2.style = 10
+        for col_idx in [2, 3, 4]:
+            bar2.add_data(
+                Reference(wsc, min_col=col_idx, min_row=col_row, max_row=col_row + len(colleagues)),
+                titles_from_data=True,
+            )
+        bar2.set_categories(
+            Reference(wsc, min_col=1, min_row=col_row + 1, max_row=col_row + len(colleagues))
+        )
+        bar2.width = 22
+        bar2.height = 14
+        wsc.add_chart(bar2, "D30")
+
+    wsc.column_dimensions["A"].width = 30
+    wsc.column_dimensions["B"].width = 10
+    wsc.column_dimensions["C"].width = 10
+
     buf = BytesIO()
     wb.save(buf)
     buf.seek(0)
