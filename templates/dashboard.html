@@ -350,6 +350,8 @@
   <div class="dash-actions">
     <a href="/export/json" class="export-btn">⬇ JSON</a>
     <a href="/export/csv" class="export-btn">⬇ CSV</a>
+    <a href="/export/xlsx" class="export-btn">⬇ Excel</a>
+    <a href="/export/docx" class="export-btn">⬇ Word</a>
     <a href="/export/html" class="export-btn">⬇ HTML Report</a>
     <button class="export-btn" onclick="refreshData(true)">↺ Refresh</button>
   </div>
@@ -467,6 +469,8 @@ function switchTab(name, btn) {
 }
 
 // ── Initial load ──
+let analysisPoller = null;
+
 document.addEventListener('DOMContentLoaded', () => {
   refreshData(false);
   startPolling();
@@ -477,13 +481,47 @@ async function refreshData(force) {
     const url = '/api/data' + (force ? '?force=1' : '');
     const resp = await fetch(url);
     const data = await resp.json();
-    if (data.error) { showError(data.error); return; }
+    if (data.error && !data.status) { showError(data.error); return; }
     state = data;
-    renderAll();
     document.getElementById('refreshNotice').classList.remove('visible');
+
+    if (data.status === 'running') {
+      showAnalysing();
+      startAnalysisPoller();
+    } else {
+      stopAnalysisPoller();
+      renderAll();
+    }
   } catch(e) {
     showError('Failed to load data: ' + e.message);
   }
+}
+
+function showAnalysing() {
+  document.getElementById('overviewLoading').style.display = 'flex';
+  document.getElementById('overviewLoading').innerHTML =
+    '<div class="spinner"></div><div class="loading-text">Analysing feedback with Claude…</div>';
+  document.getElementById('overviewContent').style.display = 'none';
+}
+
+function startAnalysisPoller() {
+  if (analysisPoller) return;
+  analysisPoller = setInterval(async () => {
+    try {
+      const resp = await fetch('/api/data');
+      const data = await resp.json();
+      if (data.status !== 'running') {
+        stopAnalysisPoller();
+        state = data;
+        if (data.error) { showError(data.error); return; }
+        renderAll();
+      }
+    } catch(e) {}
+  }, 3000);
+}
+
+function stopAnalysisPoller() {
+  if (analysisPoller) { clearInterval(analysisPoller); analysisPoller = null; }
 }
 
 function showError(msg) {

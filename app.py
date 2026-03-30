@@ -8,10 +8,11 @@ import json
 import csv
 import time
 import hashlib
+import threading
 from datetime import datetime
 from pathlib import Path
 from functools import wraps
-from io import StringIO
+from io import StringIO, BytesIO
 
 from flask import (
     Flask, render_template, request, jsonify,
@@ -39,7 +40,10 @@ _cache = {
     "analysis": None,
     "last_hash": None,
     "last_processed": 0,
+    "status": "idle",   # "idle" | "running" | "error"
+    "error": None,
 }
+_analysis_lock = threading.Lock()
 
 client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
@@ -172,24 +176,48 @@ def empty_analysis():
     }
 
 
+def _run_analysis_background(submissions, h):
+    try:
+        analysis = analyse_with_claude(submissions)
+        _cache["analysis"] = analysis
+        _cache["last_hash"] = h
+        _cache["last_processed"] = time.time()
+        _cache["status"] = "idle"
+        _cache["error"] = None
+    except Exception as e:
+        _cache["status"] = "error"
+        _cache["error"] = str(e)
+
+
 def get_analysis(force=False):
-    """Return cached analysis or refresh if data changed."""
+    """Return cached analysis immediately; trigger background refresh if stale."""
     submissions = get_submissions()
     h = submissions_hash(submissions)
 
+    # Cache is fresh — return straight away
     if not force and _cache["analysis"] and _cache["last_hash"] == h:
         return _cache["analysis"], submissions
 
+    # No submissions — short-circuit
     if not submissions:
         _cache["analysis"] = empty_analysis()
         _cache["last_hash"] = h
+        _cache["status"] = "idle"
         return _cache["analysis"], submissions
 
-    analysis = analyse_with_claude(submissions)
-    _cache["analysis"] = analysis
-    _cache["last_hash"] = h
-    _cache["last_processed"] = time.time()
-    return analysis, submissions
+    # Kick off background analysis if not already running
+    with _analysis_lock:
+        if _cache["status"] != "running":
+            _cache["status"] = "running"
+            _cache["error"] = None
+            threading.Thread(
+                target=_run_analysis_background,
+                args=(submissions, h),
+                daemon=True,
+            ).start()
+
+    # Return whatever is cached right now (may be stale or None)
+    return _cache["analysis"] or empty_analysis(), submissions
 
 
 # ──────────────────────────────────────────────────────────
@@ -279,6 +307,8 @@ def api_data():
             "analysis": analysis,
             "submission_count": len(submissions),
             "last_processed": _cache["last_processed"],
+            "status": _cache["status"],
+            "error": _cache["error"],
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -387,6 +417,225 @@ def export_html():
     resp = make_response(html)
     resp.headers["Content-Type"] = "text/html"
     resp.headers["Content-Disposition"] = "attachment; filename=apm_feedback_report.html"
+    return resp
+
+
+@app.route("/export/docx")
+@require_dashboard_auth
+def export_docx():
+    from docx import Document
+    from docx.shared import RGBColor
+    analysis, submissions = get_analysis()
+    generated = datetime.now().strftime("%d %B %Y at %H:%M")
+
+    doc = Document()
+
+    # Title
+    title = doc.add_heading("APM Assessment — Feedback Report", 0)
+    title.runs[0].font.color.rgb = RGBColor(0x2e, 0x5c, 0xff)
+
+    doc.add_paragraph(f"Generated: {generated} · {len(submissions)} submission{'s' if len(submissions) != 1 else ''}")
+
+    # Executive summary
+    doc.add_heading("Executive Summary", 1)
+    doc.add_paragraph(analysis.get("executive_summary", ""))
+
+    # Stats table
+    doc.add_heading("Overview", 1)
+    sc = analysis.get("sentiment_counts", {})
+    stats_table = doc.add_table(rows=2, cols=5)
+    stats_table.style = "Table Grid"
+    headers = ["Submissions", "Feedback Points", "Suggestions", "Positive", "Negative"]
+    values = [
+        str(len(submissions)),
+        str(analysis.get("total_feedback_points", 0)),
+        str(analysis.get("total_suggestions", 0)),
+        str(sc.get("positive", 0)),
+        str(sc.get("negative", 0)),
+    ]
+    for i, (h, v) in enumerate(zip(headers, values)):
+        stats_table.cell(0, i).text = h
+        stats_table.cell(0, i).paragraphs[0].runs[0].font.bold = True
+        stats_table.cell(1, i).text = v
+
+    # Themes
+    doc.add_heading("Themes", 1)
+    for theme in analysis.get("themes", []):
+        doc.add_heading(f"{theme['theme']} ({theme.get('sentiment', '')})", 2)
+        if theme.get("description"):
+            p = doc.add_paragraph(theme["description"])
+            p.runs[0].italic = True
+        for pt in theme.get("points", []):
+            p = doc.add_paragraph(style="List Bullet")
+            p.add_run(f'"{pt["text"]}"')
+            p.add_run(f"\n— {pt['contributor_name']}, {pt.get('contributor_role', '–')}").font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+
+    # Colleague summaries
+    doc.add_heading("Colleagues", 1)
+    for c in analysis.get("colleague_summaries", []):
+        doc.add_heading(c["contributor_name"], 2)
+        role_line = c.get("contributor_role", "–")
+        if c.get("contributor_email"):
+            role_line += f" · {c['contributor_email']}"
+        doc.add_paragraph(role_line).runs[0].font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+        if c.get("overall_rating"):
+            doc.add_paragraph(f"Overall rating: {c['overall_rating']}")
+        if c.get("summary"):
+            doc.add_paragraph(c["summary"])
+
+    # Raw submissions
+    doc.add_heading("Raw Submissions", 1)
+    field_labels = {
+        "clarity": "Clarity", "structure": "Structure", "relevance": "Relevance",
+        "jargon": "Jargon", "length": "Length", "specific_issues": "Specific Issues",
+        "specific_positive": "What Works", "suggestions": "Suggestions",
+        "overall": "Overall Rating", "additional": "Additional",
+    }
+    for s in submissions:
+        doc.add_heading(f"{s['contributor_name']} — {s['timestamp'][:10]}", 2)
+        doc.add_paragraph(s.get("contributor_role", "–")).runs[0].font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+        fb = s.get("feedback", {})
+        for key, label in field_labels.items():
+            val = fb.get(key, "")
+            if val:
+                p = doc.add_paragraph()
+                p.add_run(f"{label}: ").bold = True
+                p.add_run(val)
+
+    buf = BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    resp = make_response(buf.read())
+    resp.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    resp.headers["Content-Disposition"] = "attachment; filename=apm_feedback_report.docx"
+    return resp
+
+
+@app.route("/export/xlsx")
+@require_dashboard_auth
+def export_xlsx():
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    analysis, submissions = get_analysis()
+
+    wb = openpyxl.Workbook()
+
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(fill_type="solid", fgColor="2E5CFF")
+    header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    def style_header_row(ws, row=1):
+        for cell in ws[row]:
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_align
+
+    # ── Sheet 1: Summary ──
+    ws1 = wb.active
+    ws1.title = "Summary"
+    ws1.append(["APM Assessment Feedback Report"])
+    ws1["A1"].font = Font(bold=True, size=14)
+    ws1.append([f"Generated: {datetime.now().strftime('%d %B %Y at %H:%M')}"])
+    ws1.append([])
+    ws1.append(["Metric", "Value"])
+    style_header_row(ws1, 4)
+    sc = analysis.get("sentiment_counts", {})
+    for label, val in [
+        ("Submissions", len(submissions)),
+        ("Feedback Points", analysis.get("total_feedback_points", 0)),
+        ("Suggestions", analysis.get("total_suggestions", 0)),
+        ("Positive Points", sc.get("positive", 0)),
+        ("Neutral Points", sc.get("neutral", 0)),
+        ("Negative Points", sc.get("negative", 0)),
+    ]:
+        ws1.append([label, val])
+    ws1.append([])
+    ws1.append(["Executive Summary"])
+    ws1["A9"].font = Font(bold=True)
+    ws1.append([analysis.get("executive_summary", "")])
+    ws1["A10"].alignment = Alignment(wrap_text=True)
+    ws1.column_dimensions["A"].width = 25
+    ws1.column_dimensions["B"].width = 60
+    ws1.row_dimensions[10].height = 80
+
+    # ── Sheet 2: Themes ──
+    ws2 = wb.create_sheet("Themes")
+    ws2.append(["Theme", "Description", "Theme Sentiment", "Contributor", "Role", "Feedback Text", "Field", "Sentiment"])
+    style_header_row(ws2)
+    for theme in analysis.get("themes", []):
+        for pt in theme.get("points", []):
+            ws2.append([
+                theme.get("theme", ""),
+                theme.get("description", ""),
+                theme.get("sentiment", ""),
+                pt.get("contributor_name", ""),
+                pt.get("contributor_role", ""),
+                pt.get("text", ""),
+                pt.get("field", ""),
+                pt.get("sentiment", ""),
+            ])
+    for col, width in zip("ABCDEFGH", [22, 30, 14, 18, 18, 55, 18, 12]):
+        ws2.column_dimensions[col].width = width
+    for row in ws2.iter_rows(min_row=2):
+        for cell in row:
+            cell.alignment = Alignment(wrap_text=True, vertical="top")
+
+    # ── Sheet 3: Colleagues ──
+    ws3 = wb.create_sheet("Colleagues")
+    ws3.append(["Name", "Role", "Email", "Overall Rating", "Positive", "Neutral", "Negative", "Summary"])
+    style_header_row(ws3)
+    for c in analysis.get("colleague_summaries", []):
+        ws3.append([
+            c.get("contributor_name", ""),
+            c.get("contributor_role", ""),
+            c.get("contributor_email", ""),
+            c.get("overall_rating", ""),
+            c.get("positive_count", 0),
+            c.get("neutral_count", 0),
+            c.get("negative_count", 0),
+            c.get("summary", ""),
+        ])
+    for col, width in zip("ABCDEFGH", [20, 20, 28, 16, 9, 9, 9, 50]):
+        ws3.column_dimensions[col].width = width
+
+    # ── Sheet 4: Raw Submissions ──
+    ws4 = wb.create_sheet("Raw Submissions")
+    ws4.append([
+        "Timestamp", "Name", "Role", "Email",
+        "Clarity", "Structure", "Relevance", "Jargon", "Length",
+        "Specific Issues", "What Works", "Suggestions", "Overall Rating", "Additional",
+    ])
+    style_header_row(ws4)
+    for s in submissions:
+        fb = s.get("feedback", {})
+        ws4.append([
+            s.get("timestamp", ""),
+            s.get("contributor_name", ""),
+            s.get("contributor_role", ""),
+            s.get("contributor_email", ""),
+            fb.get("clarity", ""),
+            fb.get("structure", ""),
+            fb.get("relevance", ""),
+            fb.get("jargon", ""),
+            fb.get("length", ""),
+            fb.get("specific_issues", ""),
+            fb.get("specific_positive", ""),
+            fb.get("suggestions", ""),
+            fb.get("overall", ""),
+            fb.get("additional", ""),
+        ])
+    for col, width in zip("ABCDEFGHIJKLMN", [22, 18, 18, 28, 14, 14, 14, 14, 10, 40, 40, 40, 16, 40]):
+        ws4.column_dimensions[col].width = width
+    for row in ws4.iter_rows(min_row=2):
+        for cell in row:
+            cell.alignment = Alignment(wrap_text=True, vertical="top")
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    resp = make_response(buf.read())
+    resp.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    resp.headers["Content-Disposition"] = "attachment; filename=apm_feedback_report.xlsx"
     return resp
 
 
