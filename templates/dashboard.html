@@ -604,7 +604,12 @@ function startAnalysisPoller() {
       if (data.status !== 'running') {
         stopAnalysisPoller();
         state = data;
-        if (data.error) { showError(data.error); return; }
+        if (data.error) {
+          showError(data.error);
+          // Surface the error in the header so it's visible on any tab
+          document.getElementById('metaLine').textContent = '⚠ Analysis failed: ' + data.error;
+          return;
+        }
         renderAll();
       }
     } catch(e) {}
@@ -628,6 +633,9 @@ function startPolling() {
       const d = await resp.json();
       if (d.changed && d.current_hash !== lastHash) {
         document.getElementById('refreshNotice').classList.add('visible');
+      } else if (!d.changed) {
+        // Stay in sync — prevent spurious notifications for already-rendered data
+        lastHash = d.current_hash;
       }
     } catch(e) {}
   }, 30000);
@@ -637,12 +645,18 @@ function startPolling() {
 function renderAll() {
   const a = state.analysis;
   const count = state.submission_count;
-  lastHash = null; // reset so refresh notice clears
+  // Track the hash we just rendered so the poll doesn't re-fire the notice
+  // for data the client already has.
+  lastHash = state.current_hash || null;
 
-  // Meta line
+  // Meta line — warn if submission count outpaces the analysed colleague list
   const processed = state.last_processed ? new Date(state.last_processed * 1000).toLocaleTimeString() : '–';
+  const colleagueCount = (a.colleague_summaries || []).length;
+  const staleSuffix = (state.status !== 'running' && count > colleagueCount && colleagueCount > 0)
+    ? ` · ⚠ ${count - colleagueCount} submission${count - colleagueCount !== 1 ? 's' : ''} not yet in analysis — click ↺ Refresh`
+    : '';
   document.getElementById('metaLine').textContent =
-    `${count} submission${count !== 1 ? 's' : ''} · Last processed ${processed}`;
+    `${count} submission${count !== 1 ? 's' : ''} · Last processed ${processed}${staleSuffix}`;
 
   // Counts for tabs
   document.getElementById('themeCount').textContent = (a.themes || []).length;

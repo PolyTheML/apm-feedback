@@ -42,6 +42,8 @@ _cache = {
     "last_processed": 0,
     "status": "idle",   # "idle" | "running" | "error"
     "error": None,
+    "retry_count": 0,
+    "retry_after": 0.0,  # epoch time before which retries are suppressed
 }
 _analysis_lock = threading.Lock()
 
@@ -194,9 +196,19 @@ def _run_analysis_background(submissions, h):
         _cache["last_processed"] = time.time()
         _cache["status"] = "idle"
         _cache["error"] = None
+        _cache["retry_count"] = 0
+        _cache["retry_after"] = 0.0
     except Exception as e:
+        # Always update last_hash on failure so /api/check stops reporting
+        # changed=True in a loop — the notification clears until a genuinely
+        # new submission arrives.
+        _cache["last_hash"] = h
         _cache["status"] = "error"
         _cache["error"] = str(e)
+        _cache["retry_count"] += 1
+        # Exponential backoff: 30s, 60s, 120s (capped)
+        backoff = min(120, 30 * _cache["retry_count"])
+        _cache["retry_after"] = time.time() + backoff
 
 
 def get_analysis(force=False):
@@ -218,6 +230,11 @@ def get_analysis(force=False):
     # Kick off background analysis if not already running
     with _analysis_lock:
         if _cache["status"] != "running":
+            # Respect retry backoff unless the caller forced a refresh
+            if (not force
+                    and _cache["status"] == "error"
+                    and time.time() < _cache["retry_after"]):
+                return _cache["analysis"] or empty_analysis(), submissions
             _cache["status"] = "running"
             _cache["error"] = None
             threading.Thread(
@@ -226,7 +243,12 @@ def get_analysis(force=False):
                 daemon=True,
             ).start()
 
-    # Return whatever is cached right now (may be stale or None)
+    # Wait briefly (up to 2 s) — catches fast completions and avoids an
+    # immediate stale-data flash when the previous run is nearly done.
+    deadline = time.time() + 2.0
+    while _cache["status"] == "running" and time.time() < deadline:
+        time.sleep(0.1)
+
     return _cache["analysis"] or empty_analysis(), submissions
 
 
@@ -316,6 +338,7 @@ def api_data():
         return jsonify({
             "analysis": analysis,
             "submission_count": len(submissions),
+            "current_hash": submissions_hash(submissions),
             "last_processed": _cache["last_processed"],
             "status": _cache["status"],
             "error": _cache["error"],
