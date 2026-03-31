@@ -103,10 +103,20 @@ Please analyse this feedback and return ONLY a valid JSON object (no markdown, n
   "gm_headline": "One clear, direct sentence summarising the overall verdict for a senior manager who has 10 seconds to read it. Lead with the overall sentiment, name the biggest strength and biggest concern. Example style: 'Colleagues find the questionnaire well-structured and relevant, but consistently flag jargon and unclear time expectations as barriers to completion.'",
   "overall_sentiment": "positive OR mixed OR negative — choose based on the balance of sentiment counts",
   "executive_summary": "Three structured paragraphs: (1) Overall picture — what respondents think of the assessment in plain language. (2) Key strengths — what is working well, with specific examples. (3) Key concerns and recommendations — what needs to change and concrete actions to take. Write for a general manager with no technical background. Use plain language, no jargon.",
+  "key_strengths": [
+    {{
+      "title": "Short label for the strength (3-5 words)",
+      "description": "One sentence explaining what colleagues appreciate and why it matters",
+      "supporting_quote": "Exact verbatim quote from a submission that best illustrates this strength — do not paraphrase",
+      "contributor_name": "Name of the person quoted"
+    }}
+  ],
   "top_recommendations": [
-    "Specific, actionable recommendation 1 — start with a verb, be concrete",
-    "Specific, actionable recommendation 2",
-    "Specific, actionable recommendation 3"
+    {{
+      "action": "Specific action starting with a verb — be concrete, not generic",
+      "why": "One sentence explaining the problem this solves, grounded in the feedback",
+      "impact": "High|Medium|Low"
+    }}
   ],
   "total_feedback_points": <integer>,
   "total_suggestions": <integer>,
@@ -187,6 +197,7 @@ def empty_analysis():
         "gm_headline": "No submissions received yet.",
         "overall_sentiment": "neutral",
         "executive_summary": "No submissions received yet.",
+        "key_strengths": [],
         "top_recommendations": [],
         "total_feedback_points": 0,
         "total_suggestions": 0,

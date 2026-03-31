@@ -26,6 +26,21 @@
   .pos { background: #e6f7f2; color: #0d9f6e; }
   .neg { background: #fdeaea; color: #d94f4f; }
   .neu { background: #f0f0f0; color: #666; }
+  .headline { background: #eef2ff; border-left: 4px solid #2e5cff; padding: 14px 18px; border-radius: 0 8px 8px 0; font-size: 1.05rem; font-style: italic; margin-bottom: 28px; color: #1a1a2e; }
+  .strengths { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; margin-bottom: 28px; }
+  .strength-card { border: 1px solid #c6f0e0; border-radius: 8px; padding: 16px; background: #f5fdf9; }
+  .strength-card .s-title { font-weight: 700; color: #0d9f6e; font-size: .95rem; margin-bottom: 4px; }
+  .strength-card .s-desc { font-size: .88rem; color: #333; margin-bottom: 10px; }
+  .strength-card .s-quote { font-size: .82rem; font-style: italic; color: #555; border-left: 3px solid #0d9f6e; padding-left: 10px; }
+  .strength-card .s-attr { font-size: .75rem; color: #888; margin-top: 4px; }
+  .recs { list-style: none; padding: 0; margin-bottom: 28px; }
+  .rec-item { display: flex; gap: 14px; align-items: flex-start; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; }
+  .rec-impact { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 3px 8px; border-radius: 99px; white-space: nowrap; flex-shrink: 0; margin-top: 2px; }
+  .impact-High { background: #fdeaea; color: #d94f4f; }
+  .impact-Medium { background: #fff7e6; color: #b45309; }
+  .impact-Low { background: #f0f0f0; color: #666; }
+  .rec-body .rec-action { font-weight: 600; font-size: .95rem; color: #1a1a2e; }
+  .rec-body .rec-why { font-size: .85rem; color: #666; margin-top: 3px; }
   @media print { body { margin: 20px; } }
 </style>
 </head>
@@ -33,10 +48,48 @@
 <h1>APM Assessment — Feedback Report</h1>
 <div class="meta">Generated: {{ generated }} · {{ submissions|length }} submission{{ 's' if submissions|length != 1 }}</div>
 
+{% if analysis.gm_headline %}
+<div class="headline">{{ analysis.gm_headline }}</div>
+{% endif %}
+
 <div class="summary">
   <strong>Executive Summary</strong><br>
   {{ analysis.executive_summary }}
 </div>
+
+{% if analysis.key_strengths %}
+<h2>Key Strengths</h2>
+<div class="strengths">
+  {% for s in analysis.key_strengths %}
+  <div class="strength-card">
+    <div class="s-title">{{ s.title }}</div>
+    <div class="s-desc">{{ s.description }}</div>
+    {% if s.supporting_quote %}
+    <div class="s-quote">{{ s.supporting_quote }}
+      {% if s.contributor_name %}<div class="s-attr">— {{ s.contributor_name }}</div>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if analysis.top_recommendations %}
+<h2>Actionable Recommendations</h2>
+<ul class="recs">
+  {% for r in analysis.top_recommendations %}
+  <li class="rec-item">
+    {% if r.impact is defined %}
+    <span class="rec-impact impact-{{ r.impact }}">{{ r.impact }}</span>
+    {% endif %}
+    <div class="rec-body">
+      <div class="rec-action">{{ r.action if r.action is defined else r }}</div>
+      {% if r.why is defined %}<div class="rec-why">{{ r.why }}</div>{% endif %}
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
 
 <div class="stats">
   <div class="stat"><div class="val">{{ submissions|length }}</div><div class="lbl">Submissions</div></div>
