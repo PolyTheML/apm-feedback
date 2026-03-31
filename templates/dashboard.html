@@ -183,6 +183,20 @@
   color: var(--ink-soft);
   line-height: 1.5;
 }
+.rec-impact {
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  padding: 2px 7px;
+  border-radius: 99px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.impact-High { background: #fdeaea; color: #d94f4f; }
+.impact-Medium { background: #fff7e6; color: #b45309; }
+.impact-Low { background: #f0f0f0; color: #666; }
+.rec-why { color: var(--ink-muted, #888); font-size: .85em; }
 .rec-list li::before {
   content: '→';
   color: var(--accent);
@@ -718,7 +732,14 @@ function renderOverview(a) {
   const recList = document.getElementById('recList');
   const recs = a.top_recommendations || [];
   recList.innerHTML = recs.length
-    ? recs.map(r => `<li>${esc(r)}</li>`).join('')
+    ? recs.map(r => {
+        if (typeof r === 'object' && r.action) {
+          const impact = r.impact ? `<span class="rec-impact impact-${esc(r.impact)}">${esc(r.impact)}</span> ` : '';
+          const why = r.why ? `<span class="rec-why"> — ${esc(r.why)}</span>` : '';
+          return `<li>${impact}<strong>${esc(r.action)}</strong>${why}</li>`;
+        }
+        return `<li>${esc(r)}</li>`;
+      }).join('')
     : '<li>No recommendations available yet.</li>';
 
   document.getElementById('execSummary').textContent = a.executive_summary || 'No summary available.';
