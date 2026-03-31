@@ -162,9 +162,16 @@ IMPORTANT RULES:
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=8000,
+        max_tokens=16384,
         messages=[{"role": "user", "content": prompt}]
     )
+
+    # Detect truncation (stop_reason != "end_turn" means output was cut off)
+    if response.stop_reason != "end_turn":
+        raise RuntimeError(
+            f"Claude response was truncated (stop_reason={response.stop_reason}). "
+            "The analysis is too large — consider reducing submission data or increasing max_tokens."
+        )
 
     text = response.content[0].text.strip()
     # Strip any accidental markdown fences
