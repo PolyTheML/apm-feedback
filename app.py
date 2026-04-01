@@ -189,7 +189,13 @@ IMPORTANT RULES:
         text = text.split("```")[1]
         if text.startswith("json"):
             text = text[4:]
-    return json.loads(text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # Feedback text often contains unescaped double-quotes that Claude
+        # echoes verbatim, producing invalid JSON.  json_repair fixes these.
+        from json_repair import repair_json
+        return json.loads(repair_json(text))
 
 
 def empty_analysis():
